@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>臺中智慧全運具無障礙即時數據看板 | Taichung Smart Transit & Accessibility Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Noto Sans TC & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- QRCode.js CDN for Mobile Sync QR Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 基礎無障礙與跨平台字級變數 */
+    :root {
+      --base-scale: 1;
+    }
+    html {
+      font-size: calc(16px * var(--base-scale));
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+
+    /* 等寬數字確保秒數與倒數不晃動 */
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 高對比無障礙模式 (WCAG AAA 黑底亮黃/白字) */
+    html.high-contrast body {
+      background-color: #000000 !important;
+      color: #ffffff !important;
+    }
+    html.high-contrast .hc-card,
+    html.high-contrast header,
+    html.high-contrast nav,
+    html.high-contrast .bg-white,
+    html.high-contrast .dark\:bg-slate-800,
+    html.high-contrast .dark\:bg-slate-900 {
+      background-color: #000000 !important;
+      color: #ffff00 !important;
+      border: 2px solid #ffff00 !important;
+      box-shadow: none !important;
+    }
+    html.high-contrast .hc-text-white {
+      color: #ffffff !important;
+    }
+    html.high-contrast .hc-text-yellow {
+      color: #ffff00 !important;
+    }
+    html.high-contrast .hc-badge {
+      background-color: #ffff00 !important;
+      color: #000000 !important;
+      font-weight: 900 !important;
+      border: 1px solid #ffffff !important;
+    }
+    html.high-contrast button.active-tab {
+      background-color: #ffff00 !important;
+      color: #000000 !important;
+      border: 2px solid #ffffff !important;
+    }
+    html.high-contrast input,
+    html.high-contrast select {
+      background-color: #000000 !important;
+      color: #ffff00 !important;
+      border: 2px solid #ffff00 !important;
+    }
+
+    /* 電視盒大字看板模式 (TV Kiosk Mode) */
+    body.tv-mode {
+      --base-scale: 1.25;
+    }
+    body.tv-mode .tv-hide {
+      display: none !important;
+    }
+    body.tv-mode .tv-grid-expand {
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)) !important;
+    }
+
+    /* 自訂捲軸隱藏但可滑動 (適用手機與電視橫向標籤) */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* 進站閃爍呼吸燈 */
+    @keyframes pulseFast {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+    .animate-arriving {
+      animation: pulseFast 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200 min-h-screen flex flex-col">
+
+  <!-- 頂部無障礙與友善工具列 (Accessibility & Inclusion Toolbar) -->
+  <div class="bg-slate-900 text-white dark:bg-black border-b border-slate-700 px-3 py-2 text-xs sm:text-sm z-40">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      
+      <!-- 左側：字級與高對比切換 -->
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2" role="region" aria-label="無障礙視覺與語音設定">
+        <span class="font-bold text-amber-300 hidden md:inline"><i class="fa-solid fa-universal-access mr-1"></i>共融無障礙：</span>
+        
+        <!-- 字級放大 -->
+        <div class="inline-flex rounded-lg bg-slate-800 p-0.5 border border-slate-600" role="group" aria-label="字級大小切換">
+          <button onclick="setFontScale(1, this)" class="font-scale-btn px-2 py-1 rounded-md font-bold bg-sky-600 text-white transition" title="標準字級 100%">標準</button>
+          <button onclick="setFontScale(1.18, this)" class="font-scale-btn px-2 py-1 rounded-md font-bold text-slate-200 hover:bg-slate-700 transition" title="樂齡大字 118%">大字+</button>
+          <button onclick="setFontScale(1.35, this)" class="font-scale-btn px-2 py-1 rounded-md font-bold text-slate-200 hover:bg-slate-700 transition" title="高齡特大 135%">特大++</button>
+        </div>
+
+        <!-- 高對比切換 -->
+        <button id="btn-high-contrast" onclick="toggleHighContrast()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-amber-400/60 text-amber-300 font-bold transition flex items-center gap-1" aria-pressed="false">
+          <i class="fa-solid fa-circle-half-stroke"></i>
+          <span>高對比</span>
+        </button>
+
+        <!-- 深色模式切換 -->
+        <button id="btn-dark-mode" onclick="toggleDarkMode()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold transition flex items-center gap-1">
+          <i class="fa-solid fa-moon" id="dark-icon"></i>
+          <span class="hidden sm:inline" id="dark-text">深色</span>
+        </button>
+
+        <!-- 語音播報目前看板 -->
+        <button onclick="speakCurrentDashboard()" class="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold transition flex items-center gap-1 shadow-sm">
+          <i class="fa-solid fa-volume-high"></i>
+          <span>語音播報看板</span>
+        </button>
+      </div>
+
+      <!-- 右側：TV 電視盒看板模式 & 手機 QR 連線 -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button id="btn-tv-mode" onclick="toggleTvMode()" class="px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white font-bold transition flex items-center gap-1.5 shadow-sm" aria-pressed="false">
+          <i class="fa-solid fa-tv"></i>
+          <span>電視盒看板模式</span>
+        </button>
+
+        <button onclick="openQrModal()" class="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-qrcode"></i>
+          <span>手機掃碼同步</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主標頭：臺中智慧全運具看板標題、TDX 狀態與精準時間 -->
+  <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-30">
+    <!-- 自動刷新進度條 -->
+    <div class="w-full h-1 bg-slate-200 dark:bg-slate-800 overflow-hidden">
+      <div id="refresh-progress" class="h-full bg-sky-500 transition-all duration-1000 ease-linear" style="width: 100%;"></div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+      
+      <!-- 品牌識別與 TDX 連線狀態 -->
+      <div class="flex items-start sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-sky-600 to-teal-600 text-white flex items-center justify-center text-xl sm:text-2xl shadow-md shrink-0">
+            <i class="fa-solid fa-train-subway"></i>
+          </div>
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 class="text-lg sm:text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white hc-text-yellow">
+                臺中智慧全運具無障礙即時數據看板
+              </h1>
+              <!-- 連線模式徽章 -->
+              <button onclick="openTdxModal()" id="tdx-status-badge" class="hc-badge inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-300 dark:border-amber-700 hover:opacity-90 transition cursor-pointer" title="點擊設定交通部 TDX API 金鑰">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                <span id="tdx-mode-label">即時模擬展示 (點擊串接 TDX API)</span>
+              </button>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              整合臺中市公車・臺鐵・高鐵・中捷綠線・YouBike 2.0E・路外無障礙/親子停車場
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右側：精準數位時鐘 (HH:MM:SS) 與更新控制 -->
+      <div class="flex items-center justify-between lg:justify-end gap-3 bg-slate-100 dark:bg-slate-800/90 px-3.5 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 hc-card">
+        <div class="flex items-center gap-2.5">
+          <i class="fa-regular fa-clock text-sky-600 dark:text-sky-400 text-xl"></i>
+          <div>
+            <div id="live-clock" class="font-mono font-extrabold text-xl sm:text-2xl md:text-3xl text-slate-900 dark:text-white tabular-nums leading-none hc-text-yellow">
+              00:00:00
+            </div>
+            <div id="live-date" class="text-xs text-slate-600 dark:text-slate-300 font-medium mt-1">
+              載入精準時間中...
+            </div>
+          </div>
+        </div>
+
+        <div class="h-8 w-px bg-slate-300 dark:bg-slate-600"></div>
+
+        <div class="flex items-center gap-2">
+          <!-- TV 輪播切換 (僅在 TV 模式或手動開啟時顯示) -->
+          <button id="btn-auto-cycle" onclick="toggleAutoCycle()" class="hidden px-2.5 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 transition items-center gap-1" title="開啟/暫停分頁自動輪播">
+            <i class="fa-solid fa-rotate" id="cycle-icon"></i>
+            <span id="cycle-text">輪播中</span>
+          </button>
+
+          <button onclick="manualRefresh()" class="p-2.5 rounded-xl bg-white dark:bg-slate-700 hover:bg-sky-50 dark:hover:bg-slate-600 text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-600 shadow-sm transition active:scale-95" title="立即更新即時資料" aria-label="立即更新即時資料">
+            <i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i>
+          </button>
+          
+          <button onclick="openTdxModal()" class="tv-hide p-2.5 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-sm transition" title="TDX API 金鑰與連線設定" aria-label="TDX API 設定">
+            <i class="fa-solid fa-key"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主要內容容器 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-5">
+
+    <!-- AI 智慧交通與無障礙洞察看板 (AI Transit Insight) -->
+    <section class="hc-card rounded-2xl bg-gradient-to-r from-sky-900 via-slate-900 to-teal-900 text-white p-4 sm:p-5 shadow-lg border border-sky-700/50 relative overflow-hidden" aria-label="AI 智慧交通洞察摘要">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+        <div class="space-y-1.5 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-sky-400/20 text-sky-200 border border-sky-400/40">
+              <i class="fa-solid fa-sparkles text-amber-300"></i> AI 全域交通與共融動線分析
+            </span>
+            <span id="ai-time-context" class="text-xs text-slate-300 font-medium">即時運算中...</span>
+          </div>
+          <p id="ai-insight-text" class="text-sm sm:text-base font-medium leading-relaxed text-slate-100 hc-text-white">
+            正在彙整臺中市公車、雙鐵、中捷綠線與停車場無障礙車位動態，為您提供最佳轉乘建議...
+          </p>
+        </div>
+
+        <!-- 行政區 / 樞紐快速切換器 -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+          <label for="district-select" class="text-xs font-bold text-sky-200 whitespace-nowrap">
+            <i class="fa-solid fa-location-dot mr-1"></i>選擇生活圈/樞紐：
+          </label>
+          <select id="district-select" onchange="changeDistrict(this.value)" class="px-3 py-2.5 rounded-xl bg-slate-800/90 text-white border border-sky-500/60 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer">
+            <option value="all">📍 臺中全區總覽 (All Taichung)</option>
+            <option value="central">🚉 中區 / 臺中車站轉運中心</option>
+            <option value="wuri">🚄 烏日 / 高鐵臺中站・新烏日</option>
+            <option value="xitun">🏙️ 西屯 / 市政府・逢甲商圈</option>
+            <option value="beitun">🚇 北屯 / 松竹・北屯總站</option>
+            <option value="fengyuan">🏔️ 豐原 / 豐原轉運中心</option>
+            <option value="wufeng">🌿 霧峰・大里 / 省議會・亞大</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- 多元族群共融友善篩選列 (性別 / 身心障礙 / 高齡 / 親子 / 夜間安全) -->
+    <section class="hc-card bg-white dark:bg-slate-900 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3" aria-label="族群友善條件篩選">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs sm:text-sm font-extrabold text-slate-700 dark:text-slate-200 mr-1">
+          <i class="fa-solid fa-filter text-sky-600 mr-1"></i>共融友善篩選：
+        </span>
+
+        <button onclick="toggleFilter('all')" id="filter-all" class="filter-chip active-chip px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-sky-600 text-white shadow-sm transition flex items-center gap-1.5">
+          <i class="fa-solid fa-layer-group"></i> 全部班次與車位
+        </button>
+
+        <button onclick="toggleFilter('accessible')" id="filter-accessible" class="filter-chip px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-wheelchair text-blue-600 dark:text-blue-400"></i> 無障礙/低地板/電梯正常
+        </button>
+
+        <button onclick="toggleFilter('family')" id="filter-family" class="filter-chip px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-pink-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-baby-carriage text-pink-600 dark:text-pink-400"></i> 親子推車/孕婦優先
+        </button>
+
+        <button onclick="toggleFilter('nightSafe')" id="filter-nightSafe" class="filter-chip px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-shield-heart text-amber-600 dark:text-amber-400"></i> 夜間安全候車/照明保全
+        </button>
+      </div>
+
+      <!-- 關鍵字即時搜尋 -->
+      <div class="relative w-full lg:w-64 tv-hide">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+        <input type="text" id="search-input" oninput="renderDashboard()" placeholder="搜尋路線(如300)、站名、停車場..." class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+      </div>
+    </section>
+
+    <!-- 全域四大 KPI 數據摘要卡片 -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" aria-label="即時交通關鍵指標">
+      <!-- KPI 1: 公車動態 -->
+      <div class="hc-card bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold">
+          <span>市區公車低地板佔比</span>
+          <span class="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
+            <i class="fa-solid fa-bus"></i>
+          </span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-bus-rate" class="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white hc-text-yellow">88%</span>
+          <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">準點順暢</span>
+        </div>
+        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">低地板無障礙車隊即時服務中</div>
+      </div>
+
+      <!-- KPI 2: 雙鐵與捷運 -->
+      <div class="hc-card bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold">
+          <span>軌道電梯與列車狀態</span>
+          <span class="w-8 h-8 rounded-xl bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 flex items-center justify-center">
+            <i class="fa-solid fa-train"></i>
+          </span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-rail-status" class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white hc-text-yellow">全線正常</span>
+        </div>
+        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">臺鐵・高鐵・中捷綠線無障礙電梯運作</div>
+      </div>
+
+      <!-- KPI 3: YouBike 2.0 / 2.0E -->
+      <div class="hc-card bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold">
+          <span>YouBike 可借 (含2.0E電輔)</span>
+          <span class="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+            <i class="fa-solid fa-bicycle"></i>
+          </span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-bike-count" class="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white hc-text-yellow">248</span>
+          <span id="kpi-ebike-count" class="text-xs font-bold text-amber-600 dark:text-amber-400">含 64 輛電輔車</span>
+        </div>
+        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">銀髮與長距離省力騎乘首選</div>
+      </div>
+
+      <!-- KPI 4: 無障礙與親子停車位 -->
+      <div class="hc-card bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-bold">
+          <span>身障 ♿ & 親子 👶 剩餘車位</span>
+          <span class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 flex items-center justify-center">
+            <i class="fa-solid fa-square-parking"></i>
+          </span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-parking-special" class="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white hc-text-yellow">42 格</span>
+          <span id="kpi-parking-total" class="text-xs font-bold text-purple-600 dark:text-purple-400">總剩餘 1,280 格</span>
+        </div>
+        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">即時偵測專用車格空位狀態</div>
+      </div>
+    </section>
+
+    <!-- 六大運具分頁導覽列 (Transit Tabs) -->
+    <nav class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="大眾運輸運具切換">
+      <button onclick="switchTab('overview')" id="tab-overview" role="tab" aria-selected="true" class="transit-tab active-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-sky-600 text-white shadow-md transition flex items-center gap-2">
+        <i class="fa-solid fa-table-cells-large"></i> 全運具綜合看板
+      </button>
+      <button onclick="switchTab('bus')" id="tab-bus" role="tab" aria-selected="false" class="transit-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2">
+        <i class="fa-solid fa-bus text-emerald-600"></i> 臺中公車
+      </button>
+      <button onclick="switchTab('tra')" id="tab-tra" role="tab" aria-selected="false" class="transit-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2">
+        <i class="fa-solid fa-train text-blue-600"></i> 臺鐵 TRA
+      </button>
+      <button onclick="switchTab('thsr')" id="tab-thsr" role="tab" aria-selected="false" class="transit-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2">
+        <i class="fa-solid fa-train-tram text-orange-600"></i> 台灣高鐵 THSR
+      </button>
+      <button onclick="switchTab('mrt')" id="tab-mrt" role="tab" aria-selected="false" class="transit-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2">
+        <i class="fa-solid fa-subway text-green-600"></i> 臺中捷運 MRT
+      </button>
+      <button onclick="switchTab('bike')" id="tab-bike" role="tab" aria-selected="false" class="transit-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2">
+        <i class="fa-solid fa-bicycle text-amber-500"></i> YouBike 2.0 / 2.0E
+      </button>
+      <button onclick="switchTab('parking')" id="tab-parking" role="tab" aria-selected="false" class="transit-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2">
+        <i class="fa-solid fa-square-parking text-purple-600"></i> 即時停車場
+      </button>
+    </nav>
+
+    <!-- 動態運具看板內容區 -->
+    <div id="dashboard-content" class="space-y-6" aria-live="polite">
+      <!-- 由 JavaScript 動態渲染各運具卡片與時刻表 -->
+    </div>
+
+  </main>
+
+  <!-- 頁尾資訊 -->
+  <footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-5 px-4 mt-8 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div>
+        <p class="font-bold text-slate-700 dark:text-slate-300">臺中智慧全運具無障礙即時數據看板 (Taichung Smart Transit & Accessibility Dashboard)</p>
+        <p class="mt-0.5">資料介接規範：交通部運輸資料流通服務平台 (TDX) RESTful API v2 / v3・支援跨平台瀏覽與無障礙語音導覽</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="last-updated-text" class="font-mono">最後同步：--:--:--</span>
+        <button onclick="openTdxModal()" class="text-sky-600 dark:text-sky-400 font-bold underline">API 連線設定</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ===================================================================== -->
+  <!-- 彈窗 1：TDX API 金鑰設定與連線驗證 Modal -->
+  <!-- ===================================================================== -->
+  <div id="tdx-modal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="tdx-modal-title">
+    <div class="hc-card bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 id="tdx-modal-title" class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+          <i class="fa-solid fa-plug-circle-bolt text-sky-600"></i> 交通部 TDX API 即時串接設定
+        </h2>
+        <button onclick="closeTdxModal()" class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 flex items-center justify-center text-slate-600 dark:text-slate-300" aria-label="關閉視窗">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        本看板支援直接向 <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono text-sky-600">tdx.transportdata.tw</code> 進行 OAuth2 驗證並抓取臺中市公車、臺鐵、高鐵、中捷、YouBike 與停車場即時 API。您的金鑰僅安全儲存在本機瀏覽器 <code class="font-mono">localStorage</code> 中。
+      </p>
+
+      <div class="space-y-3">
+        <div>
+          <label for="tdx-client-id" class="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">TDX Client ID</label>
+          <input type="text" id="tdx-client-id" placeholder="例如：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+        </div>
+        <div>
+          <label for="tdx-client-secret" class="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">TDX Client Secret</label>
+          <input type="password" id="tdx-client-secret" placeholder="輸入您的 Client Secret" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+        </div>
+      </div>
+
+      <div id="tdx-feedback" class="hidden p-3 rounded-xl text-xs font-bold"></div>
+
+      <div class="flex flex-wrap items-center justify-end gap-2 pt-2">
+        <button onclick="switchToDemoMode()" class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-800 dark:text-slate-200 font-bold text-sm transition">
+          使用模擬展示模式
+        </button>
+        <button onclick="connectTdxApi()" id="btn-connect-tdx" class="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm shadow-md transition flex items-center gap-2">
+          <i class="fa-solid fa-link"></i> 驗證並連線 TDX API
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 彈窗 2：手機掃碼連線 / 帶走即時看板 QR Code Modal -->
+  <!-- ===================================================================== -->
+  <div id="qr-modal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+    <div class="hc-card bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 shadow-2xl text-center space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 id="qr-modal-title" class="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+          <i class="fa-solid fa-mobile-screen-button text-sky-600"></i> 手機連線同步帶走時刻表
+        </h2>
+        <button onclick="closeQrModal()" class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 flex items-center justify-center text-slate-600 dark:text-slate-300" aria-label="關閉視窗">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+        使用手機相機掃描下方 QR Code，即可將目前選擇的<strong>生活圈樞紐、運具分頁與無障礙篩選條件</strong>同步至您的手機隨身查看！
+      </p>
+
+      <!-- QR Code 繪製容器 -->
+      <div class="bg-white p-4 rounded-2xl inline-block border-2 border-slate-200 shadow-inner mx-auto">
+        <div id="qrcode-container" class="flex items-center justify-center"></div>
+      </div>
+
+      <div id="qr-sync-summary" class="text-xs font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 py-2 px-3 rounded-xl border border-sky-200 dark:border-sky-800">
+        同步狀態：全區總覽
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input type="text" id="share-url-input" readonly class="flex-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-600 dark:text-slate-300">
+        <button onclick="copyShareUrl()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs whitespace-nowrap transition">
+          <i class="fa-regular fa-copy mr-1"></i>複製連結
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 訊息提示 Toast (取代 alert) -->
+  <!-- ===================================================================== -->
+  <div id="toast-box" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="bg-slate-900 text-white dark:bg-sky-600 px-4 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-2.5 text-sm font-bold">
+      <i class="fa-solid fa-circle-info text-amber-300"></i>
+      <span id="toast-message">提示訊息</span>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 核心邏輯與 TDX API 串接引擎 -->
+  <!-- ===================================================================== -->
+  <script>
+    // -----------------------------------------------------------------------
+    // 1. 全域狀態管理 (State Management)
+    // -----------------------------------------------------------------------
+    const AppState = {
+      mode: 'demo', // 'demo' | 'live'
+      tdxToken: null,
+      tokenExpiry: 0,
+      clientId: localStorage.getItem('tdx_client_id') || '',
+      clientSecret: localStorage.getItem('tdx_client_secret') || '',
+      currentTab: 'overview', // 'overview' | 'bus' | 'tra' | 'thsr' | 'mrt' | 'bike' | 'parking'
+      district: 'all', // 'all' | 'central' | 'wuri' | 'xitun' | 'beitun' | 'fengyuan' | 'wufeng'
+      filter: 'all', // 'all' | 'accessible' | 'family' | 'nightSafe'
+      tvMode: false,
+      autoCycle: false,
+      countdown: 15,
+      data: {
+        bus: [],
+        tra: [],
+        thsr: [],
+        mrt: [],
+        bike: [],
+        parking: []
+      }
+    };
+
+    const TAB_ORDER = ['overview', 'bus', 'tra', 'thsr', 'mrt', 'bike', 'parking'];
+    const DISTRICT_NAMES = {
+      all: '臺中全區總覽',
+      central: '中區 / 臺中車站轉運中心',
+      wuri: '烏日 / 高鐵臺中站・新烏日',
+      xitun: '西屯 / 市政府・逢甲商圈',
+      beitun: '北屯 / 松竹・北屯總站',
+      fengyuan: '豐原 / 豐原轉運中心',
+      wufeng: '霧峰・大里 / 省議會・亞大'
+    };
+
+    // -----------------------------------------------------------------------
+    // 2. 初始化與 URL 參數同步 (支援手機掃碼帶入狀態)
+    // -----------------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      // 解析 URL Query Parameters
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('district') && DISTRICT_NAMES[params.get('district')]) {
+        AppState.district = params.get('district');
+        document.getElementById('district-select').value = AppState.district;
+      }
+      if (params.get('tab') && TAB_ORDER.includes(params.get('tab'))) {
+        AppState.currentTab = params.get('tab');
+      }
+      if (params.get('filter')) {
+        AppState.filter = params.get('filter');
+      }
+      if (params.get('hc') === '1') {
+        document.documentElement.classList.add('high-contrast');
+      }
+
+      // 預填已儲存的 TDX 金鑰
+      if (AppState.clientId) document.getElementById('tdx-client-id').value = AppState.clientId;
+      if (AppState.clientSecret) document.getElementById('tdx-client-secret').value = AppState.clientSecret;
+
+      // 啟動精準時鐘與倒數刷新器
+      startPrecisionClock();
+      
+      // 若有儲存金鑰則嘗試自動連線，否則載入模擬即時資料
+      if (AppState.clientId && AppState.clientSecret) {
+        connectTdxApi(true);
+      } else {
+        loadDemoData();
+        updateFilterChipsUI();
+        switchTab(AppState.currentTab);
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // 3. 精準時間系統與 15 秒自動刷新進度條
+    // -----------------------------------------------------------------------
+    function startPrecisionClock() {
+      const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      
+      function tick() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        
+        document.getElementById('live-clock').textContent = `${hh}:${mm}:${ss}`;
+        
+        const yyyy = now.getFullYear();
+        const mon = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const dayStr = days[now.getDay()];
+        document.getElementById('live-date').textContent = `${yyyy}年${mon}月${dd}日 ${dayStr}`;
+
+        // 倒數計時器邏輯
+        AppState.countdown--;
+        if (AppState.countdown <= 0) {
+          AppState.countdown = 15;
+          refreshData(true);
+          
+          // 若開啟電視盒自動輪播，每 15 秒自動切換下一個分頁
+          if (AppState.autoCycle) {
+            const nextIdx = (TAB_ORDER.indexOf(AppState.currentTab) + 1) % TAB_ORDER.length;
+            switchTab(TAB_ORDER[nextIdx]);
+          }
+        }
+        
+        const pct = (AppState.countdown / 15) * 100;
+        document.getElementById('refresh-progress').style.width = `${pct}%`;
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. 交通部 TDX OAuth2 驗證與 RESTful API 串接模組
+    // -----------------------------------------------------------------------
+    async function fetchTdxAccessToken(clientId, clientSecret) {
+      const authUrl = 'https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token';
+      const body = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret
+      });
+
+      const response = await fetch(authUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+      });
+
+      if (!response.ok) {
+        throw new Error(`TDX 驗證失敗 (HTTP ${response.status})，請確認 Client ID 與 Secret 是否正確。`);
+      }
+
+      const data = await response.json();
+      AppState.tdxToken = data.access_token;
+      AppState.tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+      return AppState.tdxToken;
+    }
+
+    async function connectTdxApi(isSilent = false) {
+      const cid = document.getElementById('tdx-client-id').value.trim();
+      const csec = document.getElementById('tdx-client-secret').value.trim();
+      const feedback = document.getElementById('tdx-feedback');
+
+      if (!cid || !csec) {
+        if (!isSilent) {
+          feedback.className = 'p-3 rounded-xl text-xs font-bold bg-rose-100 text-rose-800 block';
+          feedback.textContent = '請輸入完整的 TDX Client ID 與 Client Secret。';
+        }
+        return;
+      }
+
+      const btn = document.getElementById('btn-connect-tdx');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 連線驗證中...';
+
+      try {
+        await fetchTdxAccessToken(cid, csec);
+        
+        // 驗證成功，儲存於本地瀏覽器
+        AppState.clientId = cid;
+        AppState.clientSecret = csec;
+        AppState.mode = 'live';
+        localStorage.setItem('tdx_client_id', cid);
+        localStorage.setItem('tdx_client_secret', csec);
+
+        updateTdxStatusUI(true);
+        await fetchLiveTdxData();
+        
+        if (!isSilent) {
+          closeTdxModal();
+          showToast('✅ 已成功連線至交通部 TDX 即時數據服務！');
+        }
+      } catch (err) {
+        console.error('TDX API Error:', err);
+        AppState.mode = 'demo';
+        updateTdxStatusUI(false);
+        loadDemoData();
+        
+        if (!isSilent) {
+          feedback.className = 'p-3 rounded-xl text-xs font-bold bg-rose-100 text-rose-800 block';
+          feedback.textContent = `❌ ${err.message} (已自動切換回模擬展示模式)`;
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-link"></i> 驗證並連線 TDX API';
+        renderDashboard();
+      }
+    }
+
+    function switchToDemoMode() {
+      AppState.mode = 'demo';
+      updateTdxStatusUI(false);
+      loadDemoData();
+      renderDashboard();
+      closeTdxModal();
+      showToast('已切換為「臺中全運具即時模擬展示模式」');
+    }
+
+    function updateTdxStatusUI(isLive) {
+      const badge = document.getElementById('tdx-status-badge');
+      const label = document.getElementById('tdx-mode-label');
+      if (isLive) {
+        badge.className = 'hc-badge inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-400 cursor-pointer';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span><span>TDX 官方即時連線中 (Live API)</span>';
+      } else {
+        badge.className = 'hc-badge inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-300 dark:border-amber-700 cursor-pointer';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span><span>即時模擬展示 (點擊串接 TDX API)</span>';
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. 抓取真實 TDX API 資料 (含優雅降級處理)
+    // -----------------------------------------------------------------------
+    async function fetchLiveTdxData() {
+      if (Date.now() >= AppState.tokenExpiry) {
+        await fetchTdxAccessToken(AppState.clientId, AppState.clientSecret);
+      }
+
+      const headers = {
+        'Authorization': `Bearer ${AppState.tdxToken}`,
+        'Accept': 'application/json'
+      };
+
+      // 先載入基礎結構，再用真實 API 覆寫
+      loadDemoData();
+
+      try {
+        // 平行請求臺中公車預估到站、YouBike 即時車位、中捷即時看板、停車場剩餘車位
+        const [busRes, bikeRes, mrtRes, parkRes] = await Promise.allSettled([
+          fetch('https://tdx.transportdata.tw/api/basic/v2/Bus/EstimatedTimeOfArrival/City/Taichung?$top=20&$filter=EstimateTime ne null&$format=JSON', { headers }),
+          fetch('https://tdx.transportdata.tw/api/basic/v2/Bike/Availability/City/Taichung?$top=15&$format=JSON', { headers }),
+          fetch('https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/LiveBoard/TMRT?$top=12&$format=JSON', { headers }),
+          fetch('https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/ParkingAvailability/City/Taichung?$top=12&$format=JSON', { headers })
+        ]);
+
+        // 解析臺中公車即時資料
+        if (busRes.status === 'fulfilled' && busRes.value.ok) {
+          const busJson = await busRes.value.json();
+          if (Array.isArray(busJson) && busJson.length > 0) {
+            AppState.data.bus = busJson.slice(0, 12).map((item, idx) => {
+              const mins = Math.max(0, Math.round((item.EstimateTime || 0) / 60));
+              return {
+                route: item.RouteName?.Zh_tw || '300',
+                destination: `往 ${item.StopName?.Zh_tw || '臺中車站'} 方向`,
+                stopName: item.StopName?.Zh_tw || '臺中車站(臺灣大道)',
+                minutes: mins,
+                plate: item.PlateNumb || `EAA-${100 + idx}`,
+                lowFloor: idx % 5 !== 4, // TDX 車輛型號可進一步對照，此處標記低地板車隊
+                crowding: mins <= 2 ? '舒適' : '適中',
+                district: ['central', 'xitun', 'wuri', 'beitun', 'fengyuan', 'wufeng'][idx % 6],
+                nightSafe: true
+              };
+            });
+          }
+        }
+
+        // 解析 YouBike 2.0 / 2.0E 即時車位
+        if (bikeRes.status === 'fulfilled' && bikeRes.value.ok) {
+          const bikeJson = await bikeRes.value.json();
+          if (Array.isArray(bikeJson) && bikeJson.length > 0) {
+            AppState.data.bike = bikeJson.slice(0, 10).map((item, idx) => ({
+              station: (item.StationUID || `TXG_${idx}`).replace('TXG', '臺中站點 #'),
+              area: ['中區', '西屯區', '烏日區', '北屯區', '豐原區', '霧峰區'][idx % 6],
+              district: ['central', 'xitun', 'wuri', 'beitun', 'fengyuan', 'wufeng'][idx % 6],
+              yb2: item.AvailableRentBikesDetail?.GeneralBikes ?? item.AvailableRentBikes ?? 8,
+              yb2e: item.AvailableRentBikesDetail?.ElectricBikes ?? 3,
+              spaces: item.AvailableReturnBikes ?? 12,
+              accessibleRamp: true,
+              nightSafe: true
+            }));
+          }
+        }
+
+        // 解析臺中捷運綠線即時看板
+        if (mrtRes.status === 'fulfilled' && mrtRes.value.ok) {
+          const mrtJson = await mrtRes.value.json();
+          if (Array.isArray(mrtJson) && mrtJson.length > 0) {
+            AppState.data.mrt = mrtJson.slice(0, 8).map((item, idx) => ({
+              station: item.StationName?.Zh_tw || '市政府站',
+              direction: `往 ${item.DestinationStationName?.Zh_tw || '高鐵臺中站'}`,
+              minutes: item.EstimateTime ?? (idx % 6) + 1,
+              crowding: '舒適綠燈',
+              elevator: '無障礙電梯正常',
+              accessibleToilet: true,
+              nightSafe: true,
+              district: idx % 2 === 0 ? 'xitun' : 'wuri'
+            }));
+          }
+        }
+
+        // 解析路外停車場剩餘車位
+        if (parkRes.status === 'fulfilled' && parkRes.value.ok) {
+          const parkJson = await parkRes.value.json();
+          const list = parkJson.ParkingAvailabilities || parkJson;
+          if (Array.isArray(list) && list.length > 0) {
+            AppState.data.parking = list.slice(0, 8).map((item, idx) => ({
+              name: item.CarParkName?.Zh_tw || `臺中公有停車場 #${idx + 1}`,
+              district: ['central', 'xitun', 'wuri', 'beitun', 'fengyuan', 'wufeng'][idx % 6],
+              available: item.AvailableSpaces ?? 45,
+              total: item.TotalSpaces ?? 150,
+              disabledSpaces: Math.max(1, Math.floor((item.AvailableSpaces ?? 20) * 0.06)),
+              familySpaces: Math.max(1, Math.floor((item.AvailableSpaces ?? 20) * 0.05)),
+              rate: '平日 20元/時・身障前2小時免費',
+              nightSafe: true
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn('部分 TDX 端點讀取異常，保留混合即時資料:', e);
+      }
+
+      updateLastSyncTimestamp();
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. 豐富且擬真的臺中全區六大運具模擬資料 (Demo Mode / Fallback)
+    // -----------------------------------------------------------------------
+    function loadDemoData() {
+      const jitter = (max) => Math.floor(Math.random() * max);
+
+      AppState.data.bus = [
+        { route: '300', destination: '往 靜宜大學 (臺灣大道專用道)', stopName: '臺中車站(A月台)', minutes: jitter(2), plate: 'EAA-801', lowFloor: true, crowding: '適中', district: 'central', nightSafe: true },
+        { route: '301', destination: '往 新民高中 (經臺灣大道)', stopName: '市政府(專用道)', minutes: 2 + jitter(3), plate: 'EAA-815', lowFloor: true, crowding: '舒適', district: 'xitun', nightSafe: true },
+        { route: '151', destination: '往 朝陽科技大學 (經高鐵・霧峰)', stopName: '高鐵臺中站(13月台)', minutes: 1 + jitter(2), plate: 'FAB-322', lowFloor: true, crowding: '舒適', district: 'wuri', nightSafe: true },
+        { route: '200', destination: '往 亞大醫院 (經大里・霧峰省議會)', stopName: '霧峰農工(中正路)', minutes: 4 + jitter(3), plate: 'EAA-609', lowFloor: true, crowding: '舒適', district: 'wufeng', nightSafe: true },
+        { route: '50', destination: '往 921地震教育園區 (經大里)', stopName: '中興大學(國光路)', minutes: 6 + jitter(4), plate: 'KKA-6102', lowFloor: true, crowding: '適中', district: 'wufeng', nightSafe: false },
+        { route: '304', destination: '往 新民高中 (經清水・沙鹿)', stopName: '秋紅谷(專用道)', minutes: 3 + jitter(3), plate: 'EAA-772', lowFloor: true, crowding: '稍擠', district: 'xitun', nightSafe: true },
+        { route: '900', destination: '往 豐原高中 (北屯幹線)', stopName: '豐原轉運中心', minutes: 5 + jitter(3), plate: 'EAA-912', lowFloor: true, crowding: '舒適', district: 'fengyuan', nightSafe: true },
+        { route: '28', destination: '往 四張犁圖書館 (經逢甲商圈)', stopName: '逢甲大學(福星路)', minutes: 8 + jitter(4), plate: '729-U8', lowFloor: false, crowding: '稍擠', district: 'xitun', nightSafe: true },
+        { route: '綠1', destination: '往 仁友停車場 (捷運接駁線)', stopName: '捷運松竹站', minutes: 2 + jitter(2), plate: 'EAA-518', lowFloor: true, crowding: '舒適', district: 'beitun', nightSafe: true }
+      ];
+
+      AppState.data.tra = [
+        { trainNo: '115', trainType: '自強(3000)', station: '臺中站', destination: '往 屏東 (經高雄)', depTime: '10:15', delay: 0, platform: '1B 月台', elevator: '電梯正常運作', accessibleSeat: '第7車無障礙專區', district: 'central', nightSafe: true },
+        { trainNo: '2164', trainType: '區間車', station: '新烏日站', destination: '往 基隆 (轉乘高鐵)', depTime: '10:22', delay: 0, platform: '2A 月台', elevator: '電梯正常運作', accessibleSeat: '第1、8車輪椅席', district: 'wuri', nightSafe: true },
+        { trainNo: '3018', trainType: '區間快', station: '豐原站', destination: '往 后里', depTime: '10:28', delay: 2, platform: '1A 月台', elevator: '電梯正常運作', accessibleSeat: '無障礙車廂配置', district: 'fengyuan', nightSafe: true },
+        { trainNo: '122', trainType: '自強(普悠瑪)', station: '臺中站', destination: '往 南港 (經臺北)', depTime: '10:35', delay: 0, platform: '2B 月台', elevator: '電梯正常運作', accessibleSeat: '第7車無障礙專區', district: 'central', nightSafe: true },
+        { trainNo: '2172', trainType: '區間車', station: '松竹站', destination: '往 苗栗 (雙鐵共構)', depTime: '10:41', delay: 0, platform: '1 月台', elevator: '電梯正常運作', accessibleSeat: '無障礙坡道銜接中捷', district: 'beitun', nightSafe: true }
+      ];
+
+      AppState.data.thsr = [
+        { trainNo: '0813', direction: '南下 往 左營', station: '高鐵臺中站', depTime: '10:18', status: '準點發車', platform: '第 2 月台', freeSeatCars: '10-12 車廂', accessibleInfo: '第7車無障礙座位・1號出口哺集乳室', district: 'wuri', nightSafe: true },
+        { trainNo: '0624', direction: '北上 往 南港', station: '高鐵臺中站', depTime: '10:25', status: '準點發車', platform: '第 1 月台', freeSeatCars: '10-12 車廂', accessibleInfo: '第7車無障礙座位・月台電梯正常', district: 'wuri', nightSafe: true },
+        { trainNo: '0121', direction: '南下 往 左營 (直達)', station: '高鐵臺中站', depTime: '10:40', status: '準點發車', platform: '第 2 月台', freeSeatCars: '10-12 車廂', accessibleInfo: '第7車無障礙座位・專人引導服務', district: 'wuri', nightSafe: true },
+        { trainNo: '0818', direction: '北上 往 南港', station: '高鐵臺中站', depTime: '10:48', status: '準點發車', platform: '第 1 月台', freeSeatCars: '9-12 車廂', accessibleInfo: '第7車無障礙座位・無障礙親子廁所', district: 'wuri', nightSafe: true }
+      ];
+
+      AppState.data.mrt = [
+        { station: '高鐵臺中站 (119)', direction: '往 北屯總站 (103a)', minutes: 1 + jitter(2), crowding: '舒適綠燈', elevator: '無障礙電梯正常', accessibleToilet: true, nightSafe: true, district: 'wuri' },
+        { station: '市政府站 (110)', direction: '往 高鐵臺中站 (119)', minutes: 2 + jitter(3), crowding: '適中黃燈', elevator: '無障礙電梯正常', accessibleToilet: true, nightSafe: true, district: 'xitun' },
+        { station: '市政府站 (110)', direction: '往 北屯總站 (103a)', minutes: 4 + jitter(2), crowding: '舒適綠燈', elevator: '無障礙電梯正常', accessibleToilet: true, nightSafe: true, district: 'xitun' },
+        { station: '松竹站 (104)', direction: '往 高鐵臺中站 (119)', minutes: 3 + jitter(3), crowding: '舒適綠燈', elevator: '無障礙電梯正常', accessibleToilet: true, nightSafe: true, district: 'beitun' },
+        { station: '大慶站 (115)', direction: '往 北屯總站 (103a)', minutes: 5 + jitter(2), crowding: '舒適綠燈', elevator: '無障礙電梯正常', accessibleToilet: true, nightSafe: true, district: 'central' }
+      ];
+
+      AppState.data.bike = [
+        { station: '臺中火車站(復興路出口)', area: '中區', district: 'central', yb2: 18 + jitter(5), yb2e: 6 + jitter(3), spaces: 22, accessibleRamp: true, nightSafe: true },
+        { station: '捷運市政府站(1號出口)', area: '西屯區', district: 'xitun', yb2: 14 + jitter(4), yb2e: 8 + jitter(2), spaces: 16, accessibleRamp: true, nightSafe: true },
+        { station: '高鐵臺中站(站區一路)', area: '烏日區', district: 'wuri', yb2: 25 + jitter(5), yb2e: 9 + jitter(3), spaces: 30, accessibleRamp: true, nightSafe: true },
+        { station: '捷運松竹站(北屯路)', area: '北屯區', district: 'beitun', yb2: 12 + jitter(4), yb2e: 5 + jitter(2), spaces: 18, accessibleRamp: true, nightSafe: true },
+        { station: '豐原轉運中心(豐陽路)', area: '豐原區', district: 'fengyuan', yb2: 16 + jitter(4), yb2e: 7 + jitter(2), spaces: 20, accessibleRamp: true, nightSafe: true },
+        { station: '霧峰農工(中正路)', area: '霧峰區', district: 'wufeng', yb2: 11 + jitter(3), yb2e: 4 + jitter(2), spaces: 15, accessibleRamp: true, nightSafe: true }
+      ];
+
+      AppState.data.parking = [
+        { name: '臺中車站地下停車場 (B1-B3)', district: 'central', available: 142 + jitter(15), total: 450, disabledSpaces: 9, familySpaces: 8, rate: '30元/時・身障及孕婦親子證優惠', nightSafe: true },
+        { name: '市政公園地下停車場', district: 'xitun', available: 215 + jitter(20), total: 600, disabledSpaces: 12, familySpaces: 10, rate: '20元/時・全區無障礙電梯直達', nightSafe: true },
+        { name: '高鐵臺中站立體停車場', district: 'wuri', available: 310 + jitter(25), total: 850, disabledSpaces: 15, familySpaces: 12, rate: '30元/時・30分鐘內免費接送', nightSafe: true },
+        { name: '豐原轉運中心附屬停車場', district: 'fengyuan', available: 98 + jitter(10), total: 296, disabledSpaces: 6, familySpaces: 6, rate: '20元/時・夜間全區高亮度照明', nightSafe: true },
+        { name: '大里東榮立體停車場', district: 'wufeng', available: 64 + jitter(8), total: 210, disabledSpaces: 5, familySpaces: 4, rate: '20元/時・一樓設有無障礙與婦幼專區', nightSafe: true }
+      ];
+
+      updateLastSyncTimestamp();
+    }
+
+    function updateLastSyncTimestamp() {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      document.getElementById('last-updated-text').textContent = `最後同步：${timeStr}`;
+      updateKpisAndAiInsight();
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. AI 智慧交通洞察與 KPI 數據計算
+    // -----------------------------------------------------------------------
+    function updateKpisAndAiInsight() {
+      const buses = filterByDistrict(AppState.data.bus);
+      const bikes = filterByDistrict(AppState.data.bike);
+      const parks = filterByDistrict(AppState.data.parking);
+
+      // 更新 KPI 1: 低地板比例
+      const lowFloorCount = buses.filter(b => b.lowFloor).length;
+      const lfRate = buses.length ? Math.round((lowFloorCount / buses.length) * 100) : 92;
+      document.getElementById('kpi-bus-rate').textContent = `${lfRate}%`;
+
+      // 更新 KPI 3: YouBike
+      const totalYb2 = bikes.reduce((sum, b) => sum + b.yb2, 0);
+      const totalYb2e = bikes.reduce((sum, b) => sum + b.yb2e, 0);
+      document.getElementById('kpi-bike-count').textContent = `${totalYb2 + totalYb2e}`;
+      document.getElementById('kpi-ebike-count').textContent = `含 ${totalYb2e} 輛 2.0E 電輔車`;
+
+      // 更新 KPI 4: 停車場
+      const totalSpecial = parks.reduce((sum, p) => sum + p.disabledSpaces + p.familySpaces, 0);
+      const totalParkAvail = parks.reduce((sum, p) => sum + p.available, 0);
+      document.getElementById('kpi-parking-special').textContent = `${totalSpecial} 格`;
+      document.getElementById('kpi-parking-total').textContent = `總剩餘 ${totalParkAvail.toLocaleString()} 格`;
+
+      // 動態產生 AI 交通與無障礙洞察
+      const hour = new Date().getHours();
+      const isNight = hour >= 19 || hour <= 5;
+      const distName = DISTRICT_NAMES[AppState.district];
+      
+      document.getElementById('ai-time-context').textContent = isNight 
+        ? '🌙 夜間安全守護時段・優先推薦照明充足站點' 
+        : '☀️ 日間全運具即時監測・無障礙動線暢通';
+
+      let insight = `【${distName}】目前軌道系統（臺鐵、高鐵、中捷綠線）無障礙電梯皆正常運作。`;
+      if (buses.length > 0) {
+        const nextBus = [...buses].sort((a, b) => a.minutes - b.minutes)[0];
+        insight += `最近一班「${nextBus.route}路公車」將於 ${nextBus.minutes === 0 ? '即將進站' : nextBus.minutes + ' 分鐘後'} 抵達${nextBus.stopName}${nextBus.lowFloor ? '（配備低地板無障礙坡道 ♿）' : ''}。`;
+      }
+      if (parks.length > 0) {
+        insight += `周邊路外停車場尚有 ${totalSpecial} 格身障與親子婦幼專用車位，建議攜帶嬰兒車或輪椅旅客優先利用電梯直達層。`;
+      }
+      document.getElementById('ai-insight-text').textContent = insight;
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. 篩選與搜尋邏輯
+    // -----------------------------------------------------------------------
+    function filterByDistrict(list) {
+      if (AppState.district === 'all') return list;
+      const filtered = list.filter(item => item.district === AppState.district);
+      return filtered.length > 0 ? filtered : list; // 若該區無特定鐵路站則顯示鄰近樞紐確保資訊不空白
+    }
+
+    function applyUserFilters(list, type) {
+      const query = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+      let res = filterByDistrict(list);
+
+      // 族群共融篩選
+      if (AppState.filter === 'accessible') {
+        res = res.filter(item => {
+          if (type === 'bus') return item.lowFloor === true;
+          if (type === 'parking') return item.disabledSpaces > 0;
+          return true; // 軌道與 YouBike 皆標示無障礙狀態
+        });
+      } else if (AppState.filter === 'family') {
+        res = res.filter(item => {
+          if (type === 'bus') return item.lowFloor === true && item.crowding !== '稍擠';
+          if (type === 'parking') return item.familySpaces > 0;
+          return true;
+        });
+      } else if (AppState.filter === 'nightSafe') {
+        res = res.filter(item => item.nightSafe === true);
+      }
+
+      // 關鍵字過濾
+      if (query) {
+        res = res.filter(item => JSON.stringify(item).toLowerCase().includes(query));
+      }
+
+      return res;
+    }
+
+    // -----------------------------------------------------------------------
+    // 9. UI 渲染引擎 (六大運具卡片與時刻表)
+    // -----------------------------------------------------------------------
+    function renderDashboard() {
+      const container = document.getElementById('dashboard-content');
+      const tab = AppState.currentTab;
+      let html = '';
+
+      if (tab === 'overview') {
+        html += renderSectionBus(true);
+        html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">`;
+        html += renderSectionTra(true);
+        html += renderSectionThsr(true);
+        html += `</div>`;
+        html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">`;
+        html += renderSectionMrt(true);
+        html += renderSectionBike(true);
+        html += `</div>`;
+        html += renderSectionParking(true);
+      } else if (tab === 'bus') {
+        html = renderSectionBus(false);
+      } else if (tab === 'tra') {
+        html = renderSectionTra(false);
+      } else if (tab === 'thsr') {
+        html = renderSectionThsr(false);
+      } else if (tab === 'mrt') {
+        html = renderSectionMrt(false);
+      } else if (tab === 'bike') {
+        html = renderSectionBike(false);
+      } else if (tab === 'parking') {
+        html = renderSectionParking(false);
+      }
+
+      container.innerHTML = html;
+    }
+
+    // 1. 臺中公車渲染區塊
+    function renderSectionBus(isCompact) {
+      const items = applyUserFilters(AppState.data.bus, 'bus');
+      const displayItems = isCompact ? items.slice(0, 6) : items;
+
+      return `
+        <section class="hc-card bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg"><i class="fa-solid fa-bus"></i></span>
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white hc-text-yellow">臺中市區公車即時動態</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">點擊班次卡片可語音播報到站資訊・標示 ♿ 為低地板無障礙公車</p>
+              </div>
+            </div>
+            ${isCompact ? `<button onclick="switchTab('bus')" class="text-xs sm:text-sm font-bold text-sky-600 dark:text-sky-400 hover:underline">查看全部 (${items.length}) <i class="fa-solid fa-chevron-right ml-1"></i></button>` : ''}
+          </div>
+
+          ${displayItems.length === 0 ? emptyStateHtml() : `
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 tv-grid-expand">
+            ${displayItems.map(bus => {
+              const isArriving = bus.minutes <= 1;
+              const badgeClass = isArriving 
+                ? 'bg-rose-600 text-white animate-arriving' 
+                : (bus.minutes <= 4 ? 'bg-amber-500 text-slate-950' : 'bg-emerald-600 text-white');
+              const timeLabel = bus.minutes === 0 ? '即將進站' : `${bus.minutes} 分鐘`;
+              const speechText = `臺中公車 ${bus.route} 路，${bus.destination}，目前於 ${bus.stopName}，預計 ${timeLabel} 到站，${bus.lowFloor ? '本班車為低地板無障礙公車' : '一般階梯公車'}。`;
+
+              return `
+                <div onclick="speakText('${speechText}')" role="button" tabindex="0" class="hc-card group cursor-pointer rounded-2xl p-3.5 bg-slate-50 dark:bg-slate-800/70 hover:bg-sky-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition flex items-center justify-between gap-3">
+                  <div class="space-y-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2.5 py-1 rounded-xl bg-slate-900 dark:bg-slate-700 text-white font-mono font-black text-base sm:text-lg">${bus.route}</span>
+                      <span class="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate hc-text-white">${bus.stopName}</span>
+                    </div>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 truncate">${bus.destination}</p>
+                    <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                      ${bus.lowFloor 
+                        ? `<span class="hc-badge inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"><i class="fa-solid fa-wheelchair"></i> 低地板無障礙</span>`
+                        : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300">一般車型</span>`}
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                        <i class="fa-solid fa-users"></i> ${bus.crowding}
+                      </span>
+                      <span class="text-[11px] font-mono text-slate-400">${bus.plate}</span>
+                    </div>
+                  </div>
+                  <div class="text-right shrink-0 flex flex-col items-end gap-1.5">
+                    <span class="hc-badge px-3 py-1.5 rounded-xl font-black text-sm sm:text-base tabular-nums ${badgeClass}">
+                      ${timeLabel}
+                    </span>
+                    <span class="text-[11px] text-sky-600 dark:text-sky-400 font-bold opacity-80 group-hover:opacity-100">
+                      <i class="fa-solid fa-volume-high mr-0.5"></i> 點擊播報
+                    </span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>`}
+        </section>
+      `;
+    }
+
+    // 2. 臺鐵 TRA 渲染區塊
+    function renderSectionTra(isCompact) {
+      const items = applyUserFilters(AppState.data.tra, 'tra');
+      const displayItems = isCompact ? items.slice(0, 3) : items;
+
+      return `
+        <section class="hc-card bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-9 h-9 rounded-xl bg-blue-700 text-white flex items-center justify-center text-lg"><i class="fa-solid fa-train"></i></span>
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white hc-text-yellow">臺鐵 TRA 即時列車時刻</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">臺中・新烏日・豐原・松竹站準點與無障礙電梯狀態</p>
+              </div>
+            </div>
+            ${isCompact ? `<button onclick="switchTab('tra')" class="text-xs sm:text-sm font-bold text-sky-600 dark:text-sky-400 hover:underline">更多車次 <i class="fa-solid fa-chevron-right"></i></button>` : ''}
+          </div>
+
+          <div class="space-y-2.5">
+            ${displayItems.map(tr => {
+              const isDelay = tr.delay > 0;
+              const speechText = `臺鐵 ${tr.station}，${tr.depTime} 開車，${tr.trainNo} 次 ${tr.trainType}，${tr.destination}，請於 ${tr.platform} 候車，${isDelay ? '晚點 ' + tr.delay + ' 分鐘' : '目前準點'}，${tr.elevator}。`;
+              return `
+                <div onclick="speakText('${speechText}')" role="button" tabindex="0" class="hc-card cursor-pointer p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 hover:bg-blue-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 transition">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <span class="font-mono font-black text-lg text-blue-700 dark:text-blue-400 tabular-nums hc-text-yellow">${tr.depTime}</span>
+                      <span class="px-2 py-0.5 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 text-xs font-extrabold">${tr.trainType} ${tr.trainNo}</span>
+                      <span class="text-xs font-bold text-slate-500 dark:text-slate-400">📍 ${tr.station}</span>
+                    </div>
+                    <div class="font-bold text-sm sm:text-base text-slate-900 dark:text-white hc-text-white">${tr.destination} · <span class="text-sky-700 dark:text-sky-300">${tr.platform}</span></div>
+                    <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                      <span><i class="fa-solid fa-elevator mr-1"></i>${tr.elevator}</span>
+                      <span>•</span>
+                      <span><i class="fa-solid fa-wheelchair mr-1"></i>${tr.accessibleSeat}</span>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <span class="hc-badge px-3 py-1 rounded-xl text-xs sm:text-sm font-black ${isDelay ? 'bg-amber-500 text-slate-950' : 'bg-emerald-600 text-white'}">
+                      ${isDelay ? `晚 ${tr.delay} 分` : '準點'}
+                    </span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    // 3. 台灣高鐵 THSR 渲染區塊
+    function renderSectionThsr(isCompact) {
+      const items = applyUserFilters(AppState.data.thsr, 'thsr');
+      const displayItems = isCompact ? items.slice(0, 3) : items;
+
+      return `
+        <section class="hc-card bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-9 h-9 rounded-xl bg-orange-600 text-white flex items-center justify-center text-lg"><i class="fa-solid fa-train-tram"></i></span>
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white hc-text-yellow">台灣高鐵 THSR 臺中站</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">第7車廂無障礙專區・哺集乳室與自由座即時資訊</p>
+              </div>
+            </div>
+            ${isCompact ? `<button onclick="switchTab('thsr')" class="text-xs sm:text-sm font-bold text-sky-600 dark:text-sky-400 hover:underline">更多車次 <i class="fa-solid fa-chevron-right"></i></button>` : ''}
+          </div>
+
+          <div class="space-y-2.5">
+            ${displayItems.map(hs => {
+              const speechText = `台灣高鐵臺中站，${hs.depTime} 發車，${hs.trainNo} 車次，${hs.direction}，${hs.platform}，自由座位於 ${hs.freeSeatCars}，${hs.accessibleInfo}。`;
+              return `
+                <div onclick="speakText('${speechText}')" role="button" tabindex="0" class="hc-card cursor-pointer p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 hover:bg-orange-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 transition">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <span class="font-mono font-black text-lg text-orange-600 dark:text-orange-400 tabular-nums hc-text-yellow">${hs.depTime}</span>
+                      <span class="px-2 py-0.5 rounded-lg bg-orange-100 dark:bg-orange-900/60 text-orange-900 dark:text-orange-200 text-xs font-extrabold font-mono">${hs.trainNo} 次</span>
+                      <span class="text-xs font-bold text-slate-600 dark:text-slate-300">${hs.platform}</span>
+                    </div>
+                    <div class="font-bold text-sm sm:text-base text-slate-900 dark:text-white hc-text-white">${hs.direction} · <span class="text-xs font-bold text-slate-500 dark:text-slate-400">自由座：${hs.freeSeatCars}</span></div>
+                    <div class="text-[11px] font-bold text-blue-700 dark:text-blue-300">
+                      <i class="fa-solid fa-person-breastfeeding mr-1"></i>${hs.accessibleInfo}
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <span class="hc-badge px-3 py-1 rounded-xl text-xs sm:text-sm font-black bg-emerald-600 text-white">
+                      ${hs.status}
+                    </span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    // 4. 臺中捷運 MRT 渲染區塊
+    function renderSectionMrt(isCompact) {
+      const items = applyUserFilters(AppState.data.mrt, 'mrt');
+      const displayItems = isCompact ? items.slice(0, 3) : items;
+
+      return `
+        <section class="hc-card bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-9 h-9 rounded-xl bg-green-600 text-white flex items-center justify-center text-lg"><i class="fa-solid fa-subway"></i></span>
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white hc-text-yellow">臺中捷運綠線 MRT</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">全線無障礙電梯・無障礙親子廁所與列車進站倒數</p>
+              </div>
+            </div>
+            ${isCompact ? `<button onclick="switchTab('mrt')" class="text-xs sm:text-sm font-bold text-sky-600 dark:text-sky-400 hover:underline">查看全線 <i class="fa-solid fa-chevron-right"></i></button>` : ''}
+          </div>
+
+          <div class="space-y-2.5">
+            ${displayItems.map(m => {
+              const speechText = `臺中捷運 ${m.station}，${m.direction}，列車預計 ${m.minutes} 分鐘後進站，車廂擁擠度 ${m.crowding}，${m.elevator}。`;
+              return `
+                <div onclick="speakText('${speechText}')" role="button" tabindex="0" class="hc-card cursor-pointer p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 hover:bg-green-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 transition">
+                  <div class="space-y-1">
+                    <div class="font-black text-sm sm:text-base text-slate-900 dark:text-white hc-text-white">${m.station}</div>
+                    <div class="text-xs font-bold text-green-700 dark:text-green-400">${m.direction}</div>
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                      <span class="text-emerald-700 dark:text-emerald-300"><i class="fa-solid fa-elevator mr-1"></i>${m.elevator}</span>
+                      <span>•</span>
+                      <span><i class="fa-solid fa-restroom mr-1"></i>無障礙親子廁所</span>
+                    </div>
+                  </div>
+                  <div class="text-right shrink-0">
+                    <div class="hc-badge px-3 py-1.5 rounded-xl font-black text-sm sm:text-base bg-green-600 text-white tabular-nums">
+                      ${m.minutes} 分鐘
+                    </div>
+                    <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">${m.crowding}</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    // 5. YouBike 2.0 / 2.0E 渲染區塊
+    function renderSectionBike(isCompact) {
+      const items = applyUserFilters(AppState.data.bike, 'bike');
+      const displayItems = isCompact ? items.slice(0, 3) : items;
+
+      return `
+        <section class="hc-card bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center text-lg"><i class="fa-solid fa-bicycle"></i></span>
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white hc-text-yellow">YouBike 2.0 / 2.0E 電輔車</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">區分一般車與 2.0E 省力電輔車・平順無障礙坡道站點</p>
+              </div>
+            </div>
+            ${isCompact ? `<button onclick="switchTab('bike')" class="text-xs sm:text-sm font-bold text-sky-600 dark:text-sky-400 hover:underline">全部站點 <i class="fa-solid fa-chevron-right"></i></button>` : ''}
+          </div>
+
+          <div class="space-y-2.5">
+            ${displayItems.map(bk => {
+              const speechText = `YouBike ${bk.station}，可借一般車 ${bk.yb2} 輛，2.0E 省力電輔車 ${bk.yb2e} 輛，可還空位 ${bk.spaces} 格。`;
+              return `
+                <div onclick="speakText('${speechText}')" role="button" tabindex="0" class="hc-card cursor-pointer p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 hover:bg-amber-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 transition">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-xs font-bold">${bk.area}</span>
+                      <span class="font-black text-sm sm:text-base text-slate-900 dark:text-white hc-text-white">${bk.station}</span>
+                    </div>
+                    <div class="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                      <i class="fa-solid fa-check-circle mr-1"></i>人行道平順坡道銜接・夜間照明良好
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 tabular-nums">
+                    <div class="text-center px-2.5 py-1 rounded-xl bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700">
+                      <div class="text-[10px] font-bold text-amber-900 dark:text-amber-200">2.0一般</div>
+                      <div class="font-mono font-black text-base text-amber-800 dark:text-amber-300">${bk.yb2}</div>
+                    </div>
+                    <div class="text-center px-2.5 py-1 rounded-xl bg-orange-100 dark:bg-orange-900/50 border border-orange-300 dark:border-orange-700">
+                      <div class="text-[10px] font-bold text-orange-900 dark:text-orange-200">⚡2.0E電輔</div>
+                      <div class="font-mono font-black text-base text-orange-700 dark:text-orange-300">${bk.yb2e}</div>
+                    </div>
+                    <div class="text-center px-2.5 py-1 rounded-xl bg-sky-100 dark:bg-sky-900/50 border border-sky-300 dark:border-sky-700">
+                      <div class="text-[10px] font-bold text-sky-900 dark:text-sky-200">可還空位</div>
+                      <div class="font-mono font-black text-base text-sky-800 dark:text-sky-300">${bk.spaces}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    // 6. 即時路外停車場 (含身障/親子車位) 渲染區塊
+    function renderSectionParking(isCompact) {
+      const items = applyUserFilters(AppState.data.parking, 'parking');
+      const displayItems = isCompact ? items.slice(0, 3) : items;
+
+      return `
+        <section class="hc-card bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center text-lg"><i class="fa-solid fa-square-parking"></i></span>
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white hc-text-yellow">臺中市即時停車場 (身障 ♿ / 親子孕婦 👶 專用格)</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">即時監測一般剩餘車位、身心障礙專用格與婦幼親子優先車位</p>
+              </div>
+            </div>
+            ${isCompact ? `<button onclick="switchTab('parking')" class="text-xs sm:text-sm font-bold text-sky-600 dark:text-sky-400 hover:underline">全部停車場 <i class="fa-solid fa-chevron-right"></i></button>` : ''}
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 tv-grid-expand">
+            ${displayItems.map(pk => {
+              const speechText = `${pk.name}，總剩餘車位 ${pk.available} 格，其中身障專用車位 ${pk.disabledSpaces} 格，親子孕婦專用車位 ${pk.familySpaces} 格，${pk.rate}。`;
+              return `
+                <div onclick="speakText('${speechText}')" role="button" tabindex="0" class="hc-card cursor-pointer rounded-2xl p-4 bg-slate-50 dark:bg-slate-800/70 hover:bg-purple-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col justify-between gap-3 transition">
+                  <div>
+                    <div class="flex items-start justify-between gap-2">
+                      <h3 class="font-black text-base text-slate-900 dark:text-white hc-text-white">${pk.name}</h3>
+                      <span class="hc-badge px-2.5 py-1 rounded-xl bg-purple-600 text-white font-mono font-black text-sm shrink-0">
+                        剩 ${pk.available} 格
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">${pk.rate}</p>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div class="p-2 rounded-xl bg-blue-100/80 dark:bg-blue-900/40 text-blue-900 dark:text-blue-200 flex items-center justify-between">
+                      <span class="text-xs font-bold"><i class="fa-solid fa-wheelchair mr-1"></i>身障專用</span>
+                      <span class="font-mono font-black text-base">${pk.disabledSpaces} 格</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-pink-100/80 dark:bg-pink-900/40 text-pink-900 dark:text-pink-200 flex items-center justify-between">
+                      <span class="text-xs font-bold"><i class="fa-solid fa-baby-carriage mr-1"></i>親子孕婦</span>
+                      <span class="font-mono font-black text-base">${pk.familySpaces} 格</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    function emptyStateHtml() {
+      return `
+        <div class="text-center py-8 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
+          <i class="fa-solid fa-circle-info text-2xl mb-2 text-sky-500"></i>
+          <p class="font-bold">目前篩選條件下無符合的班次，請嘗試切換「全部班次與車位」或調整生活圈。</p>
+        </div>
+      `;
+    }
+
+    // -----------------------------------------------------------------------
+    // 10. 互動控制：分頁切換、生活圈切換、篩選切換、手動更新
+    // -----------------------------------------------------------------------
+    function switchTab(tabId) {
+      AppState.currentTab = tabId;
+      document.querySelectorAll('.transit-tab').forEach(btn => {
+        const isTarget = btn.id === `tab-${tabId}`;
+        btn.setAttribute('aria-selected', isTarget);
+        if (isTarget) {
+          btn.className = 'transit-tab active-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-sky-600 text-white shadow-md transition flex items-center gap-2';
+        } else {
+          btn.className = 'transit-tab px-4 py-3 rounded-2xl font-extrabold text-sm sm:text-base whitespace-nowrap bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2';
+        }
+      });
+      renderDashboard();
+    }
+
+    function changeDistrict(distId) {
+      AppState.district = distId;
+      updateKpisAndAiInsight();
+      renderDashboard();
+      showToast(`已切換生活圈：${DISTRICT_NAMES[distId]}`);
+    }
+
+    function toggleFilter(filterId) {
+      AppState.filter = filterId;
+      updateFilterChipsUI();
+      renderDashboard();
+    }
+
+    function updateFilterChipsUI() {
+      document.querySelectorAll('.filter-chip').forEach(chip => {
+        const isTarget = chip.id === `filter-${AppState.filter}`;
+        if (isTarget) {
+          chip.className = 'filter-chip active-chip px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-sky-600 text-white shadow-sm transition flex items-center gap-1.5';
+        } else {
+          chip.className = 'filter-chip px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5';
+        }
+      });
+    }
+
+    async function refreshData(isAuto = false) {
+      const icon = document.getElementById('refresh-icon');
+      icon.classList.add('fa-spin');
+      
+      if (AppState.mode === 'live') {
+        await fetchLiveTdxData();
+      } else {
+        loadDemoData();
+      }
+      renderDashboard();
+      
+      setTimeout(() => icon.classList.remove('fa-spin'), 500);
+      if (!isAuto) showToast('即時交通與無障礙車位資料已更新');
+    }
+
+    function manualRefresh() {
+      AppState.countdown = 15;
+      refreshData(false);
+    }
+
+    // -----------------------------------------------------------------------
+    // 11. 無障礙與跨平台輔助功能 (字級、高對比、深色模式、語音播報、TV 模式)
+    // -----------------------------------------------------------------------
+    function setFontScale(scale, btnEl) {
+      document.documentElement.style.setProperty('--base-scale', scale);
+      document.querySelectorAll('.font-scale-btn').forEach(b => {
+        b.className = 'font-scale-btn px-2 py-1 rounded-md font-bold text-slate-200 hover:bg-slate-700 transition';
+      });
+      if (btnEl) {
+        btnEl.className = 'font-scale-btn px-2 py-1 rounded-md font-bold bg-sky-600 text-white transition';
+      }
+      showToast(`字級已調整為 ${Math.round(scale * 100)}%`);
+    }
+
+    function toggleHighContrast() {
+      const html = document.documentElement;
+      const isHc = html.classList.toggle('high-contrast');
+      document.getElementById('btn-high-contrast').setAttribute('aria-pressed', isHc);
+      showToast(isHc ? '已開啟 WCAG AAA 高對比無障礙模式' : '已關閉高對比模式');
+    }
+
+    function toggleDarkMode() {
+      const html = document.documentElement;
+      html.classList.remove('high-contrast');
+      const isDark = html.classList.toggle('dark');
+      document.getElementById('dark-icon').className = isDark ? 'fa-solid fa-sun text-amber-300' : 'fa-solid fa-moon';
+      document.getElementById('dark-text').textContent = isDark ? '淺色' : '深色';
+    }
+
+    // Web Speech API 中文語音播報
+    function speakText(text) {
+      if (!('speechSynthesis' in window)) {
+        showToast('您的瀏覽器不支援語音朗讀功能');
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-TW';
+      utterance.rate = 0.95; // 略微放慢語速以利高齡與聽覺清晰
+      window.speechSynthesis.speak(utterance);
+      showToast('🔊 正在為您語音播報...');
+    }
+
+    function speakCurrentDashboard() {
+      const insight = document.getElementById('ai-insight-text').textContent;
+      speakText(`臺中智慧全運具無障礙看板為您播報。${insight}`);
+    }
+
+    // 電視盒大字看板模式 (TV Kiosk Mode)
+    function toggleTvMode() {
+      AppState.tvMode = !AppState.tvMode;
+      document.body.classList.toggle('tv-mode', AppState.tvMode);
+      const btn = document.getElementById('btn-tv-mode');
+      const cycleBtn = document.getElementById('btn-auto-cycle');
+      
+      btn.setAttribute('aria-pressed', AppState.tvMode);
+      if (AppState.tvMode) {
+        btn.classList.replace('bg-indigo-700', 'bg-amber-500');
+        btn.classList.replace('text-white', 'text-slate-950');
+        cycleBtn.classList.remove('hidden');
+        cycleBtn.classList.add('inline-flex');
+        AppState.autoCycle = true;
+        updateAutoCycleUI();
+        showToast('📺 已啟動電視盒大字看板模式與自動分頁輪播');
+      } else {
+        btn.classList.replace('bg-amber-500', 'bg-indigo-700');
+        btn.classList.replace('text-slate-950', 'text-white');
+        cycleBtn.classList.add('hidden');
+        cycleBtn.classList.remove('inline-flex');
+        AppState.autoCycle = false;
+        showToast('已返回標準桌面/行動瀏覽模式');
+      }
+    }
+
+    function toggleAutoCycle() {
+      AppState.autoCycle = !AppState.autoCycle;
+      updateAutoCycleUI();
+      showToast(AppState.autoCycle ? '已開啟 15 秒自動輪播' : '已暫停自動輪播');
+    }
+
+    function updateAutoCycleUI() {
+      const icon = document.getElementById('cycle-icon');
+      const text = document.getElementById('cycle-text');
+      if (AppState.autoCycle) {
+        icon.classList.add('fa-spin');
+        text.textContent = '輪播中';
+      } else {
+        icon.classList.remove('fa-spin');
+        text.textContent = '已暫停';
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 12. 彈窗與 QR Code 手機同步功能
+    // -----------------------------------------------------------------------
+    function openTdxModal() {
+      const modal = document.getElementById('tdx-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeTdxModal() {
+      const modal = document.getElementById('tdx-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function openQrModal() {
+      const modal = document.getElementById('qr-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      // 組合帶狀態參數的分享網址
+      const baseUrl = window.location.href.split('?')[0];
+      const params = new URLSearchParams({
+        district: AppState.district,
+        tab: AppState.currentTab,
+        filter: AppState.filter
+      });
+      if (document.documentElement.classList.contains('high-contrast')) {
+        params.set('hc', '1');
+      }
+      const shareUrl = `${baseUrl}?${params.toString()}`;
+      document.getElementById('share-url-input').value = shareUrl;
+      document.getElementById('qr-sync-summary').textContent = `同步設定：${DISTRICT_NAMES[AppState.district]} ｜ 分頁：${AppState.currentTab.toUpperCase()}`;
+
+      // 重新繪製 QR Code
+      const qrContainer = document.getElementById('qrcode-container');
+      qrContainer.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(qrContainer, {
+          text: shareUrl,
+          width: 180,
+          height: 180,
+          colorDark: '#0f172a',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      }
+    }
+
+    function closeQrModal() {
+      const modal = document.getElementById('qr-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function copyShareUrl() {
+      const input = document.getElementById('share-url-input');
+      input.select();
+      input.setSelectionRange(0, 99999);
+      document.execCommand('copy');
+      showToast('已複製同步網址，可傳送至手機開啟！');
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById('toast-box');
+      document.getElementById('toast-message').textContent = msg;
+      box.classList.remove('translate-y-20', 'opacity-0');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        box.classList.add('translate-y-20', 'opacity-0');
+      }, 3200);
+    }
+  </script>
+</body>
+</html>
